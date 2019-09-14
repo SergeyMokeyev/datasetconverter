@@ -35,25 +35,8 @@ class Converter:
             shutil.rmtree(directory)
         os.mkdir(directory)
 
-    async def load_defects(self):
-        defects = {}
-        async with aiopg.create_pool(self.config.dsn) as pool:
-            async with pool.acquire() as conn:
-                async with conn.cursor() as cur:
-                    await cur.execute('SELECT cyrillic_name, name FROM defects_new')
-                    async for row in cur:
-                        defects.update({row[0]: f'{row[0]}/{row[1]}'})
-        return defects
-
-    async def convert(self):
-        template['_via_settings']['project']['name'] = self.config.project
-        template['_via_attributes']['region']['defect']['options'] = await self.load_defects()
-
-        self.make_directory(self.config.target_dir)
-        shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'via.html'), self.config.target_dir)
-
+    def get_via_img_metadata(self):
         via_img_metadata = {}
-
         for cur_dir in os.listdir(self.config.source_dir):
             cur_dir = os.path.join(self.config.source_dir, cur_dir)
             if self.config.exclude_good_img:
@@ -80,6 +63,27 @@ class Converter:
                     'regions': [],
                     'file_attributes': []
                 }})
+
+        return via_img_metadata
+
+    async def load_defects(self):
+        defects = {}
+        async with aiopg.create_pool(self.config.dsn) as pool:
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute('SELECT cyrillic_name, name FROM defects_new')
+                    async for row in cur:
+                        defects.update({row[0]: f'{row[0]}/{row[1]}'})
+        return defects
+
+    async def convert(self):
+        template['_via_settings']['project']['name'] = self.config.project
+        template['_via_attributes']['region']['defect']['options'] = await self.load_defects()
+
+        self.make_directory(self.config.target_dir)
+        shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'via.html'), self.config.target_dir)
+
+        via_img_metadata = self.get_via_img_metadata()
 
         experts = [f'expert_{i}' for i in range(1, self.config.experts + 1)]
         experts_cycle = itertools.cycle(experts)

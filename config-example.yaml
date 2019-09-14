@@ -1,0 +1,13 @@
+source_dir: ./source_dir
+target_dir: ./target_dir
+
+experts: 1
+exclude_good_img: true
+repeat_img_step: 5
+
+defects_db:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: secret
+  dbname: postgres

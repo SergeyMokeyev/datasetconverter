@@ -7,8 +7,9 @@ import shutil
 import uuid
 from PIL import Image
 import json
+import collections
+import itertools
 from datasetconverter.template import template
-from datasetconverter.tmp import test
 
 
 class Config:
@@ -28,6 +29,12 @@ class Converter:
     def __init__(self, config: Config):
         self.config = config
 
+    @staticmethod
+    def make_directory(directory):
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+        os.mkdir(directory)
+
     async def load_defects(self):
         defects = {}
         async with aiopg.create_pool(self.config.dsn) as pool:
@@ -42,55 +49,56 @@ class Converter:
         template['_via_settings']['project']['name'] = self.config.project
         template['_via_attributes']['region']['defect']['options'] = await self.load_defects()
 
-        tmp_dir = os.path.join(os.getcwd(), 'tmp')
+        self.make_directory(self.config.target_dir)
+        shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'via.html'), self.config.target_dir)
 
-        # if os.path.exists(tmp_dir):
-        #     shutil.rmtree(tmp_dir)
-        # os.mkdir(tmp_dir)
-        #
-        # via_img_metadata = {}
-        #
-        # for cur_dir in os.listdir(self.config.source_dir):
-        #     cur_dir = os.path.join(self.config.source_dir, cur_dir)
-        #     if self.config.exclude_good_img:
-        #         images = []
-        #         with open(os.path.join(cur_dir, 'data.json')) as f:
-        #             for item in json.load(f)['photos']:
-        #                 for imgs in item['LED']:
-        #                     for img, data in imgs.items():
-        #                         if data['evaluations'][0]['defects'] in [{"47": 3}, {"47": 2}, {"47": 1}]:
-        #                             continue
-        #                         images.append(os.path.join(cur_dir, img))
-        #     else:
-        #         images = [os.path.join(cur_dir, n) for n in os.listdir(cur_dir) if n.endswith('.jpg')]
-        #
-        #     for image in images:
-        #         image_name = f'{str(uuid.uuid4())}.png'
-        #
-        #         im = Image.open(image)
-        #         im.save(os.path.join(tmp_dir, image_name))
-        #
-        #         via_img_metadata.update({image_name: {
-        #             'filename': image_name,
-        #             'size': os.path.getsize(os.path.join(tmp_dir, image_name)),
-        #             'regions': [],
-        #             'file_attributes': []
-        #         }})
+        via_img_metadata = {}
 
-        via_img_metadata = test
-        print(via_img_metadata)
+        for cur_dir in os.listdir(self.config.source_dir):
+            cur_dir = os.path.join(self.config.source_dir, cur_dir)
+            if self.config.exclude_good_img:
+                images = []
+                with open(os.path.join(cur_dir, 'data.json')) as f:
+                    for item in json.load(f)['photos']:
+                        for imgs in item['LED']:
+                            for img, data in imgs.items():
+                                if data['evaluations'][0]['defects'] in [{"47": 3}, {"47": 2}, {"47": 1}]:
+                                    continue
+                                images.append(os.path.join(cur_dir, img))
+            else:
+                images = [os.path.join(cur_dir, n) for n in os.listdir(cur_dir) if n.endswith('.jpg')]
 
-        result = {}
+            for image in images:
+                image_name = f'{str(uuid.uuid4())}.png'
 
-        if os.path.exists(self.config.target_dir):
-            shutil.rmtree(self.config.target_dir)
-        os.mkdir(self.config.target_dir)
+                im = Image.open(image)
+                im.save(os.path.join(self.config.target_dir, image_name))
 
-        for expert in range(1, self.config.experts + 1):
-            print(expert)
+                via_img_metadata.update({image_name: {
+                    'filename': image_name,
+                    'size': os.path.getsize(os.path.join(self.config.target_dir, image_name)),
+                    'regions': [],
+                    'file_attributes': []
+                }})
 
+        experts = [f'expert_{i}' for i in range(1, self.config.experts + 1)]
+        experts_cycle = itertools.cycle(experts)
+        experts_images = collections.defaultdict(dict)
+        count = 0
+        for image, data in via_img_metadata.items():
+            count += 1
+            if count == self.config.repeat_img_step:
+                count = 0
+                for expert in experts:
+                    experts_images[expert].update({image: data})
+            else:
+                expert = next(experts_cycle)
+                experts_images[expert].update({image: data})
 
-
+        for expert, data in experts_images.items():
+            template['_via_img_metadata'] = data
+            with open(os.path.join(self.config.target_dir, f'{expert}.json'), 'w') as f:
+                json.dump(template, f)
 
 
 if __name__ == '__main__':

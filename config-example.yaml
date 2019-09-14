@@ -1,9 +1,9 @@
 source_dir: ./source_dir
 target_dir: ./target_dir
 
-experts: 1
+experts: 2
 exclude_good_img: true
-repeat_img_step: 5
+repeat_img_step: 7
 
 defects_db:
   host: localhost

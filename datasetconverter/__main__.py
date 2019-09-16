@@ -38,18 +38,19 @@ class Converter:
     def get_via_img_metadata(self):
         via_img_metadata = {}
         for cur_dir in os.listdir(self.config.source_dir):
+            if cur_dir.startswith('.'):
+                continue
             cur_dir = os.path.join(self.config.source_dir, cur_dir)
-            if self.config.exclude_good_img:
-                images = []
-                with open(os.path.join(cur_dir, 'data.json')) as f:
-                    for item in json.load(f)['photos']:
-                        for imgs in item['LED']:
-                            for img, data in imgs.items():
-                                if data['evaluations'][0]['defects'] in [{"47": 3}, {"47": 2}, {"47": 1}]:
-                                    continue
-                                images.append(os.path.join(cur_dir, img))
-            else:
-                images = [os.path.join(cur_dir, n) for n in os.listdir(cur_dir) if n.endswith('.jpg')]
+
+            images = []
+            with open(os.path.join(cur_dir, 'data.json')) as f:
+                for item in json.load(f)['photos']:
+                    for imgs in [{k: v} for k, v in item['LED'].items() if v['type'] != 'FULL']:
+                        for img, data in imgs.items():
+                            if (self.config.exclude_good_img and data['evaluations'][0]['defects']
+                                    in [{"47": 3}, {"47": 2}, {"47": 1}]):
+                                continue
+                            images.append(os.path.join(cur_dir, img))
 
             for image in images:
                 image_name = f'{str(uuid.uuid4())}.png'

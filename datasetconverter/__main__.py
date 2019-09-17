@@ -16,6 +16,7 @@ class Config:
     def __init__(self, file: str):
         with open(file) as f:
             data = yaml.load(f, Loader=yaml.SafeLoader)
+        self.product_id = data.get('product_id', 1)
         self.project = data.get('project', 'datasetconverter')
         self.source_dir = data.get('source_dir', './source')
         self.target_dir = data.get('target_dir', './target')
@@ -72,7 +73,11 @@ class Converter:
         async with aiopg.create_pool(self.config.dsn) as pool:
             async with pool.acquire() as conn:
                 async with conn.cursor() as cur:
-                    await cur.execute('SELECT cyrillic_name, name FROM defects_new')
+                    await cur.execute('''
+                    SELECT dn.cyrillic_name, dn.name FROM defects_new dn
+                        LEFT JOIN defect_groups_new dgn on dn.defect_group_id = dgn.id
+                    WHERE product_id = %s
+                    ''', (self.config.product_id,))
                     async for row in cur:
                         defects.update({row[0]: f'{row[0]}/{row[1]}'})
         return defects

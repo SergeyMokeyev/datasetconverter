@@ -1,3 +1,6 @@
+project: mandarin
+product_id: 4
+
 source_dir: ./source_dir
 target_dir: ./target_dir
 
